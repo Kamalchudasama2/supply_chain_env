@@ -1,0 +1,21 @@
+[project]
+name = "supply-chain-env"
+version = "0.1.0"
+description = "OpenEnv Supply Chain Environment"
+
+authors = [
+    { name = "Kamal Chudasama", email = "kamalchudasama6@gmail.com" },
+    { name = "Suraj Anil Badiger", email = "surajbadiger5748@gmail.com" }
+]
+
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "requests",
+    "openai",
+    "python-dotenv"
+]
+
+[tool.openenv]
+entrypoint = "app:app"
