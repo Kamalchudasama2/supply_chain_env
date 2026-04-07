@@ -1,0 +1,10 @@
+name: supply_chain_env
+description: Inventory optimization environment
+version: 1.0
+
+tasks:
+  - easy
+  - medium
+  - hard
+
+entrypoint: app.py
