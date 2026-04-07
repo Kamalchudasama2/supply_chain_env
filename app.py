@@ -7,7 +7,6 @@ app = FastAPI()
 
 env = None
 
-
 # ✅ Landing Page
 @app.get("/")
 def home():
