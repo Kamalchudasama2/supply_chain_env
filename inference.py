@@ -10,7 +10,7 @@ API_BASE_URL = os.getenv("API_BASE_URL")
 MODEL_NAME = os.getenv("MODEL_NAME")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-ENV_URL = os.getenv("ENV_URL", "http://localhost:8000")
+ENV_URL = os.getenv("ENV_URL") or "https://kamalchudasama-suplly-chain-env.hf.space"
 
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
@@ -38,11 +38,17 @@ async def run():
     task = "easy"
     log_start(task, "supply_chain", MODEL_NAME)
 
-    # ✅ RESET (FIXED)
-    response = requests.post(f"{ENV_URL}/reset", json={"task": task})
-    print("RESET RESPONSE:", response.text)
-
-    r = response.json()
+    
+    # ✅ SAFE RESET (FIXED)
+    try:
+        response = requests.post(f"{ENV_URL}/reset", json={"task": task}, timeout=10)
+        response.raise_for_status()
+        print("RESET RESPONSE:", response.text)
+        r = response.json()
+    except Exception as e:
+        print(f"[ERROR] Reset failed: {e}")
+        log_end(False, 0, 0.0, [])
+        return
 
     rewards = []
     steps = 0
@@ -52,15 +58,14 @@ async def run():
 
         action = get_action(obs)
 
-        # ✅ STEP (FIXED)
-        response = requests.post(f"{ENV_URL}/step", json=action)
-        print("RAW RESPONSE:", response.text)
-
-        # Handle non-JSON safely
+        
         try:
+            response = requests.post(f"{ENV_URL}/step", json=action, timeout=10)
+            response.raise_for_status()
+            print("RAW RESPONSE:", response.text)
             r = response.json()
         except Exception as e:
-            print("[ERROR] Failed to parse JSON:", e)
+            print(f"[ERROR] Step failed: {e}")
             break
 
         reward = r.get("reward", 0.0)
