@@ -78,71 +78,78 @@ Respond ONLY in JSON:
 
     except Exception as e:
         print(f"[DEBUG] LLM failed: {e}", flush=True)
-        return {"order_quantity": 0}
+        inventory = obs.get("inventory", 0)
+        return {"order_quantity": max(10, 100 - inventory)}
 
 
 # MAIN LOOP
 async def run():
-    task = "easy"
-    MAX_STEPS = 10
-    MAX_TOTAL_REWARD = MAX_STEPS * 1.0
+    TASKS = ["easy", "medium", "hard"]
 
-    rewards = []
-    steps = 0
-    success = False
-    score = 0.0
+    for task in TASKS:
+        MAX_STEPS = 10
+        MAX_TOTAL_REWARD = MAX_STEPS * 1.0
 
-    log_start(task, "supply_chain", MODEL_NAME)
+        rewards = []
+        steps = 0
+        success = False
+        score = 0.0
 
-    try:
-        
+        log_start(task, "supply_chain", MODEL_NAME)
+
         try:
-            response = requests.post(f"{ENV_URL}/reset", json={"task": task}, timeout=10)
-            response.raise_for_status()
-            r = response.json()
-        except Exception as e:
-            print(f"[ERROR] Reset failed: {e}", flush=True)
-            return
-
-        
-        for step in range(1, MAX_STEPS + 1):
-            obs = r.get("observation", {})
-
-            action = get_action(obs)
-
+            # RESET
             try:
-                response = requests.post(f"{ENV_URL}/step", json=action, timeout=10)
+                response = requests.post(f"{ENV_URL}/reset", json={"task": task}, timeout=10)
                 response.raise_for_status()
                 r = response.json()
             except Exception as e:
-                print(f"[ERROR] Step failed: {e}", flush=True)
-                break
+                print(f"[ERROR] Reset failed: {e}", flush=True)
+                log_end(False, 0, 0.01, [])
+                continue
 
-            reward = r.get("reward", 0.0)
-            done = r.get("done", True)
+            # LOOP
+            for step in range(1, MAX_STEPS + 1):
+                obs = r.get("observation", {})
 
-            rewards.append(reward)
-            steps = step
+                action = get_action(obs)
 
-            log_step(
-                step=step,
-                action=str(action),
-                reward=reward,
-                done=done,
-                error=None
-            )
+                try:
+                    response = requests.post(f"{ENV_URL}/step", json=action, timeout=10)
+                    response.raise_for_status()
+                    r = response.json()
+                except Exception as e:
+                    print(f"[ERROR] Step failed: {e}", flush=True)
+                    break
 
-            if done:
-                break
+                reward = r.get("reward", 0.0)
+                done = r.get("done", True)
 
-        
-        score = sum(rewards) / MAX_TOTAL_REWARD if MAX_TOTAL_REWARD > 0 else 0.0
-        score = min(max(score, 0.0), 1.0)
-        success = score >= 0.1
+                rewards.append(reward)
+                steps = step
 
-    finally:
-        
-        log_end(success, steps, score, rewards)
+                log_step(
+                    step=step,
+                    action=str(action),
+                    reward=reward,
+                    done=done,
+                    error=None
+                )
+
+                if done:
+                    break
+
+            
+            normalized_rewards = [(r + 1) / 2 for r in rewards]  # maps [-1,1] → [0,1]
+
+            score = sum(normalized_rewards) / len(normalized_rewards) if normalized_rewards else 0.0
+
+            # Clamp strictly between (0,1)
+            score = max(0.01, min(score, 0.99))
+            success = score >= 0.1
+
+        finally:
+            log_end(success, steps, score, rewards)
 
 
 if __name__ == "__main__":
